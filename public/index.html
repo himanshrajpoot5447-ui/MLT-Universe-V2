@@ -130,13 +130,12 @@ input,select,textarea{font-family:inherit}
 a{text-decoration:none;color:inherit}
 
 /* ── Layout ── */
-/* Mobile-first: block layout — no flex/overflow trap on mobile */
-#app{display:block;min-height:100vh;position:relative}
+#app{display:flex;height:100vh;overflow:hidden;position:relative}
 #sidebar{width:var(--sidebar);background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:transform .3s;z-index:50}
-#main-wrapper{display:block}
-#main{display:block}
-.page{display:none;animation:fadeIn .25s ease}
-.page.active{display:block}
+#main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.page{display:none;flex:1;flex-direction:column;animation:fadeIn .25s ease}
+.page.active{display:flex}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
 /* ── Sidebar ── */
@@ -412,15 +411,111 @@ input:checked+.toggle-slider:before{transform:translateX(18px)}
   .q-text{font-size:16px}
 }
 
-/* ── MOBILE (≤ 768px) ── */
+/* ── MOBILE (≤ 768px) — full app experience ── */
 @media (max-width:768px){
   :root{--sidebar:0px}
-  html,body{font-size:15px;overflow-x:hidden}
-  .page{display:none;padding:0!important}
-  .page.active{display:block!important}
-  .page-header{position:sticky;top:0;z-index:100}
-  .page-body{overflow-y:visible!important;height:auto!important;padding:14px!important}
-}@media (max-width:480px){
+  html,body{font-size:15px}
+
+  /* ── MOBILE SCROLL: keep original flex arch, just let #main scroll ── */
+  #app{height:100dvh;height:100vh;overflow:hidden}
+  #main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+  #main{flex:1;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;display:flex;flex-direction:column}
+  .page{padding:0!important;flex-direction:column;flex:1;overflow:hidden}
+  .page-header{flex-shrink:0}
+  .page-body{flex:1!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;padding:14px!important}
+
+    .page-header{
+    position:sticky;top:0;z-index:40;
+    background:var(--card)!important;
+    padding:12px 16px!important;height:auto!important;
+    border-bottom:1px solid var(--border);
+    box-shadow:0 1px 6px rgba(0,0,0,.06);
+  }
+  .page-title{font-size:18px!important}
+  .page-body{padding:14px!important;flex:1;overflow-y:visible!important;-webkit-overflow-scrolling:touch!important}
+  .card-body{padding:14px!important}
+  .card{border-radius:14px!important}
+
+  /* Grids */
+  .grid-4,.grid-3{grid-template-columns:1fr 1fr!important}
+  .grid-2{grid-template-columns:1fr!important}
+  .stat-card{padding:14px!important}
+  .stat-value{font-size:24px!important}
+
+  /* Modals → bottom sheet */
+  .modal-overlay{padding:0!important;align-items:flex-end!important}
+  .modal{border-radius:24px 24px 0 0!important;max-height:92vh!important;overflow-y:auto!important;width:100%!important;max-width:100%!important}
+
+  /* Touch inputs */
+  .form-input,input[type="text"],input[type="email"],input[type="password"],input[type="number"],select,textarea{
+    min-height:50px!important;font-size:16px!important;padding:12px 14px!important;border-radius:12px!important;
+  }
+  .btn{min-height:48px!important;font-size:14px!important;padding:12px 20px!important;border-radius:12px!important}
+  .btn-sm{min-height:38px!important;font-size:13px!important;padding:8px 14px!important}
+  .btn-lg{min-height:54px!important;font-size:15px!important}
+
+  table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  #page-login .card{width:100%;max-width:100%;border-radius:0!important;border:none!important;box-shadow:none!important;padding:32px 24px!important}
+  #page-login{padding:0!important}
+
+  .hide-mobile,.at-sidebar,.profile-cols .stat-col{display:none!important}
+  .profile-cols{flex-direction:column!important}
+  .lb-podium{grid-template-columns:1fr!important}
+
+  /* ════ TEST UI — NATIVE APP FEEL ════ */
+  .test-top-bar{
+    padding:0 14px!important;height:56px!important;
+    background:var(--card)!important;
+    border-bottom:1px solid var(--border)!important;
+    position:relative;
+  }
+  .timer{font-size:16px!important;padding:6px 12px!important;border-radius:10px!important}
+  .timer.warning{animation:timerPulse .6s ease-in-out infinite}
+
+  .question-sidebar{display:none!important}
+  .test-body{flex-direction:column!important;overflow:visible!important;background:var(--bg)}
+  .question-main{
+    padding:16px 16px 130px!important;
+    overflow-y:auto!important;flex:1!important;align-items:stretch!important;
+    -webkit-overflow-scrolling:touch;
+  }
+  .question-wrap{max-width:100%!important}
+
+  /* Q text */
+  .q-text{font-size:16px!important;line-height:1.65!important;margin-bottom:18px!important}
+
+  /* Option buttons — big tap targets */
+  .option-btn{
+    padding:16px 14px!important;font-size:15px!important;
+    border-radius:14px!important;margin-bottom:10px!important;
+    min-height:56px!important;gap:12px!important;
+    box-shadow:0 1px 4px rgba(0,0,0,.06)!important;
+    transition:transform .12s,background .15s,border-color .15s!important;
+  }
+  .option-btn:active{transform:scale(0.97)!important}
+  .option-btn.selected{box-shadow:0 2px 12px rgba(37,99,235,.18)!important}
+  .option-letter{width:32px!important;height:32px!important;font-size:13px!important;border-radius:50%!important}
+
+  /* Fixed bottom nav bar during test */
+  .q-nav-bar{
+    position:fixed!important;bottom:0!important;left:0!important;right:0!important;
+    background:var(--card)!important;border-top:1px solid var(--border)!important;
+    padding:10px 14px 16px!important;display:flex!important;gap:8px!important;
+    z-index:300!important;box-shadow:0 -4px 20px rgba(0,0,0,.09)!important;
+  }
+  .q-nav-bar .btn{flex:1!important;border-radius:12px!important}
+  .mark-btn{font-size:12px!important;padding:6px 12px!important;min-height:36px!important}
+
+  /* Submit button */
+  #top-submit-btn{padding:6px 14px!important;font-size:13px!important;min-height:36px!important;border-radius:10px!important}
+
+  /* Score result page */
+  .score-circle{width:120px!important;height:120px!important}
+  .score-pct{font-size:26px!important}
+}
+
+@media (max-width:480px){
   .grid-4,.grid-3,.grid-2{grid-template-columns:1fr 1fr!important}
   .q-text{font-size:15px!important}
   .option-btn{font-size:14px!important;min-height:52px!important}
@@ -489,6 +584,7 @@ html.mobile-sidebar-open #sidebar-backdrop{display:block}
     overflow-y:auto!important;               /* sidebar content scrolls */
     overflow-x:hidden!important;
     -webkit-overflow-scrolling:touch!important;
+    touch-action:pan-y!important;
     overscroll-behavior-y:contain!important;
     z-index:1000!important;                  /* above everything including modals */
     align-items:stretch!important;
@@ -501,6 +597,7 @@ html.mobile-sidebar-open #sidebar-backdrop{display:block}
   }
   /* Backdrop fills screen behind sidebar — tap to close */
   #sidebar-backdrop{
+    touch-action:auto!important;  /* allow tap to fire onclick=closeMobileSidebar */
     z-index:999!important;
   }
   .sidebar-logo{display:flex!important;padding:20px 20px 16px!important}
@@ -513,31 +610,15 @@ html.mobile-sidebar-open #sidebar-backdrop{display:block}
     justify-content:flex-start!important;border-radius:var(--radius)!important;
   }
   .nav-item::after{display:none!important}
-  /* Minimum touch targets for all interactive elements */
-  button, .btn, input, select, textarea, [role="button"] {
-    min-height:44px;
-    cursor:pointer;
-  }
-  .btn-sm { min-height:36px !important; }
-  input[type="checkbox"], input[type="radio"] {
-    min-height:20px;
-    min-width:20px;
-  }
+  /* NOTE: #main scroll rules are in the first @media block above — do not override here */
   #main-wrapper{margin-left:0!important}
   
   /* Mobile Header */
   #mobile-header{
-    display:flex;
-    position:sticky;
-    top:0;
-    z-index:100;
-    background:var(--card);
-    border-bottom:1px solid var(--border);
-    padding:0 16px;
-    height:56px;
-    align-items:center;
-    justify-content:space-between;
-    box-shadow:0 1px 6px rgba(0,0,0,.06);
+    display:flex;position:sticky;top:0;z-index:40;
+    background:var(--card);border-bottom:1px solid var(--border);
+    padding:0 16px;height:56px;align-items:center;justify-content:space-between;
+    box-shadow:0 1px 6px rgba(0,0,0,.06);flex-shrink:0;
     width:100%;
   }
   
@@ -551,15 +632,11 @@ html.mobile-sidebar-open #sidebar-backdrop{display:block}
 }
 
 @media (min-width:769px){
-  /* Desktop: flex layout for sidebar + main */
-  #app{display:flex;height:100vh;overflow:hidden}
-  #main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-  #main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-  .page{display:none;flex:1;flex-direction:column}
-  .page.active{display:flex}
   #mobile-header{display:none!important}
   #mobile-bottom-nav{display:none!important}
   #sidebar-backdrop{display:none!important}
+  /* On desktop main-wrapper just passes flex to #main */
+  #main-wrapper{overflow:hidden}
 }
 
 /* Fix active test overlay z-index for dark toggle */
@@ -572,9 +649,11 @@ html.no-transition *,html.no-transition *::before,html.no-transition *::after{
 }
 
 
-/* ── Prevent horizontal overflow without breaking touch ── */
-#app{max-width:100vw}
+/* ── Safari/iPhone horizontal overflow fix ── */
+html,body{max-width:100vw;overflow-x:hidden}
+#app{max-width:100vw;overflow-x:hidden}
 img{max-width:100%}
+.page-body{overflow-x:hidden}
 .login-card{max-width:100%;box-sizing:border-box}
 @media (max-width:768px){
   .page-header{flex-wrap:wrap;gap:8px}
@@ -666,7 +745,34 @@ img{max-width:100%}
 /* ═══════════════════════════════════════════════════════════════
    TARGETED MOBILE FIXES - Credit Allocation, Dashboard, Forms
    ═══════════════════════════════════════════════════════════════ */
-/* leftover mobile block removed */
+@media (max-width: 768px) {
+  /* Credit management page */
+  #page-credits .page-body { padding: 0 12px 80px !important; }
+  .credit-card-grid { 
+    display: grid !important; 
+    grid-template-columns: 1fr !important; 
+    gap: 10px !important; 
+  }
+  /* Student balance rows - no overflow */
+  .student-balance-row, 
+  [style*="display:flex"][style*="align-items:center"][style*="gap:12"] {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  /* Stats row on credits page - wrap properly */
+  .stats-row-3 { 
+    display: grid !important; 
+    grid-template-columns: 1fr 1fr !important; 
+    gap: 8px !important; 
+  }
+  /* Dashboard horizontal scroll sections */
+  .dashboard-row-scroll {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 4px !important;
+  }
+  /* Sidebar drawer handled by transform in original CSS */
+}
 
 /* ═══════════════════════════════════════════════════════════════
    MEDICAL LABORATORY THEME — Enhanced Colors & Components
@@ -984,7 +1090,9 @@ html.dark {
    MOBILE — Clean, non-conflicting additions (768px)
    ═══════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* bottom padding via page-body only */
+  /* Remove bottom padding since bottom nav is gone */
+  #main { padding-bottom: 16px !important; }
+  .page { padding-bottom: 16px !important; }
 
   /* Welcome banner compact */
   .lab-welcome-banner { padding: 14px 16px !important; gap: 12px !important; margin-bottom: 14px !important; }
@@ -1017,7 +1125,6 @@ html.dark {
 }
 
 </style>
-
 </head>
 <body>
   <!-- ── Auth Splash Screen (shown until session check completes) ── -->
@@ -1092,10 +1199,10 @@ html.dark {
   </div>
 
   <!-- MAIN WRAPPER (takes all remaining space after sidebar) -->
-  <div id="main-wrapper" style="flex:1;display:flex;flex-direction:column;min-width:0">
+  <div id="main-wrapper" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
   <!-- Mobile Header (inside main wrapper so it's a column row above content) -->
   <div id="mobile-header">
-    <button onclick="openMobileSidebar()" style="background:none;border:none;cursor:pointer;color:var(--text);padding:12px;display:flex;align-items:center;min-width:48px;min-height:48px;justify-content:center" aria-label="Open menu">
+    <button onclick="openMobileSidebar()" style="background:none;border:none;cursor:pointer;color:var(--text);padding:8px;display:flex;align-items:center" aria-label="Open menu">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div style="display:flex;align-items:center;gap:10px">
@@ -1902,8 +2009,7 @@ async function doLogin() {
     STATE.tests   = DB.tests;
     STATE.attempts = DB.attempts;
     updateSidebar();
-    // Don't force sidebar display — CSS controls it per breakpoint
-    // document.getElementById('sidebar').style.display = '';
+    document.getElementById('sidebar').style.display = '';
   const mobileLogoImg = document.getElementById('mobile-logo-img');
   const mobileLogoText = document.getElementById('mobile-logo-text');
   // Try get logo from sidebar logo-mark img if present
@@ -2108,17 +2214,6 @@ function navigate(page) {
     } else renderBuyCredits();
   }
   if (page === 'analytics') renderAnalytics();
-
-  // Re-apply mobile scroll fix on every navigation
-  if (window.innerWidth <= 768) {
-    var _app = document.getElementById('app');
-    var _mw  = document.getElementById('main-wrapper');
-    var _mn  = document.getElementById('main');
-    if (_app) { _app.style.display='block'; _app.style.height='auto'; _app.style.overflow='visible'; }
-    if (_mw)  { _mw.style.display='block';  _mw.style.height='auto';  _mw.style.overflow='visible'; }
-    if (_mn)  { _mn.style.display='block';  _mn.style.height='auto';  _mn.style.overflow='visible'; }
-    window.scrollTo(0, 0);
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -6896,12 +6991,17 @@ function initSidebarState() {
   }
   // iOS Safari: add passive touch listeners to ensure scroll works
   if (window.innerWidth <= 768) {
-    // With natural document scroll no special touch listeners needed
-    // Sidebar still benefits from passive listeners for smooth drawer
+    const main = document.getElementById('main');
+    if (main) {
+      // Passive listeners let browser handle scroll natively without waiting for JS
+      main.addEventListener('touchstart', function(){}, {passive:true});
+      main.addEventListener('touchmove',  function(){}, {passive:true});
+    }
+    // Sidebar touch listeners
     const sidebar = document.getElementById('sidebar');
     if (sidebar) {
-      sidebar.addEventListener('touchstart', function(){}, {passive:true});
-      sidebar.addEventListener('touchmove',  function(){}, {passive:true});
+      sidebar.addEventListener('touchstart', function(e){ e.stopPropagation(); }, {passive:true});
+      sidebar.addEventListener('touchmove',  function(e){ e.stopPropagation(); }, {passive:true});
     }
   }
 }
@@ -6968,29 +7068,15 @@ document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); 
 // ── Auto-restore session on page reload ───────────────────────────────────────
 (async function restoreSession() {
   const splash = document.getElementById('auth-splash');
-  let splashGone = false;
   const hideSplash = () => {
-    if (splashGone) return;
-    splashGone = true;
     if (splash) {
       splash.classList.add('fade-out');
-      setTimeout(() => { try { splash.remove(); } catch(_) {} }, 450);
+      setTimeout(() => splash.remove(), 450);
     }
   };
 
-  // HARD TIMEOUT: splash must disappear within 4 seconds no matter what
-  // This prevents the splash from blocking the screen if API is slow
-  const splashTimeout = setTimeout(() => {
-    if (!splashGone) {
-      console.warn('Auth splash timeout — forcing hide');
-      hideSplash();
-      if (!STATE.user) navigate('login');
-    }
-  }, 4000);
-
   // If no token, go to login immediately
   if (!API_TOKEN) {
-    clearTimeout(splashTimeout);
     hideSplash();
     navigate('login');
     return;
@@ -6998,60 +7084,57 @@ document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); 
 
   // Token exists — wait for backend detection then try to restore session
   try {
-    await Promise.race([
-      _backendDetected,
-      new Promise(r => setTimeout(r, 2000)) // max 2s wait for backend detection
-    ]);
+    await _backendDetected;
   } catch(e) { /* ignore */ }
 
   if (!USE_API) {
-    clearTimeout(splashTimeout);
     hideSplash();
     navigate('login');
     return;
   }
 
   try {
-    // Step 1: Just verify token — fast single API call
+    // Verify token is still valid and get fresh user data
     const freshUser = await apiRequest('GET', '/auth/me');
 
-    // Step 2: Set user state immediately from /auth/me response
-    STATE.user = {
+    // Token valid — sync full data from Supabase
+    await syncFromAPI(freshUser);
+
+    // Restore STATE
+    const dbUser = DB.users.find(u => u.id === freshUser.id);
+    STATE.user = dbUser || {
       id: freshUser.id, name: freshUser.name, email: freshUser.email,
       role: freshUser.role, credits: freshUser.credits, avatar: freshUser.avatar,
       joinDate: freshUser.join_date ? String(freshUser.join_date).split('T')[0] : new Date().toISOString().split('T')[0],
       status: freshUser.status, totalXP: freshUser.total_xp || 0,
       rank: freshUser.rank || null, phone: freshUser.phone || '',
     };
-    DB.users = [STATE.user];
-    STATE.users = DB.users;
+    STATE.users    = DB.users;
+    STATE.tests    = DB.tests;
+    STATE.attempts = DB.attempts;
 
-    // Step 3: Hide splash and navigate IMMEDIATELY — don't wait for data sync
-    clearTimeout(splashTimeout);
     updateSidebar();
+    document.getElementById('sidebar').style.display = '';
+    // Update mobile logo from sidebar
+    const mobileLogoImg = document.getElementById('mobile-logo-img');
+    const mobileLogoText = document.getElementById('mobile-logo-text');
+    if (mobileLogoImg) {
+      const sbLogo = document.querySelector('#sidebar .logo-mark img');
+      if (sbLogo) { mobileLogoImg.src = sbLogo.src; mobileLogoImg.style.display = 'block'; if(mobileLogoText) mobileLogoText.style.display='none'; }
+    }
+    setTimeout(updateMobileBottomNav, 50);
+
+    // Navigate to correct page — hide splash first so no flicker
     if (STATE.user.role === 'student') navigate('test-center');
     else navigate('dashboard');
+
     hideSplash();
     console.log('✅ Session restored for', STATE.user.name);
-
-    // Step 4: Sync all data silently in background AFTER app is visible
-    setTimeout(() => {
-      syncFromAPI(freshUser).then(() => {
-        STATE.users    = DB.users;
-        STATE.tests    = DB.tests;
-        STATE.attempts = DB.attempts;
-        // Re-render current page with fresh data
-        const pg = STATE.currentPage;
-        if (pg) navigate(pg);
-      }).catch(e => console.warn('Background sync failed:', e.message));
-    }, 100);
-
   } catch(e) {
     // Token expired or invalid — clear it and go to login
     console.warn('Session restore failed:', e.message);
     API_TOKEN = null;
     try { localStorage.removeItem('mlt_jwt'); sessionStorage.removeItem('mlt_jwt'); } catch(_) {}
-    clearTimeout(splashTimeout);
     hideSplash();
     navigate('login');
   }
