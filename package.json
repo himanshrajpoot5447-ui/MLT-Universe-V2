@@ -1,0 +1,22 @@
+{
+  "name": "mlt-universe",
+  "version": "2.5.0",
+  "description": "MLT Universe — Professional Certification Portal",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'ready'",
+    "lint": "echo 'ok'"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "vercel": "^37.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
