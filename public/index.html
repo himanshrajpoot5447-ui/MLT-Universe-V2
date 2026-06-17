@@ -5160,7 +5160,7 @@ async function saveQuestionEditorAndPublish() {
           options: q.options, correct: q.correct,
           idealTime: q.idealTime || null,
           difficulty: q.difficulty || 'medium',
-          usedInTopicTest: true, usedInMockIds: [],
+          usedInTopicTest: TC.type === 'topic', usedInMockIds: [],
         }));
         const saved = await apiRequest('POST', '/questions', toCreate, true); // ← silent
         if (Array.isArray(saved)) {
