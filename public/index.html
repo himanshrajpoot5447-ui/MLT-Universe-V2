@@ -1719,6 +1719,27 @@ let STATE = {
   testFilter: 'complete',
 };
 
+// Tracks how many items are currently shown for each "View More" list, keyed by list id
+const VIEW_MORE = {};
+const VIEW_MORE_PAGE_SIZE = 5;
+
+// Renders a fixed-size slice of `items` plus a "View More"/"View Less" button if there are more.
+// `listKey` must be unique per list on the page. `renderItem` returns the HTML for one item.
+// `rerender` is the function name (string) to call after expanding, e.g. 'renderProfile'.
+function renderViewMoreList(listKey, items, renderItem, rerenderFn, pageSize = VIEW_MORE_PAGE_SIZE) {
+  const shown = VIEW_MORE[listKey] || pageSize;
+  const visible = items.slice(0, shown);
+  const itemsHtml = visible.map(renderItem).join('');
+  if (items.length <= pageSize) return itemsHtml;
+  const hasMore = shown < items.length;
+  const btnHtml = `<div style="padding:12px 16px;text-align:center;border-top:1px solid var(--border)">
+    ${hasMore
+      ? `<button class="btn btn-secondary btn-sm" onclick="VIEW_MORE['${listKey}']=${Math.min(items.length, shown + pageSize)};${rerenderFn}()">View More (${items.length - shown} more)</button>`
+      : `<button class="btn btn-secondary btn-sm" onclick="VIEW_MORE['${listKey}']=${pageSize};${rerenderFn}()">View Less</button>`}
+  </div>`;
+  return itemsHtml + btnHtml;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // IN-MEMORY DATABASE (Full Backend Simulation)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2518,7 +2539,20 @@ function navigate(page) {
       }).catch(() => renderLeaderboard());
     } else renderLeaderboard();
   }
-  if (page === 'test-creator') renderTestCreator();
+  if (page === 'test-creator') {
+    if (USE_API && API_TOKEN) {
+      Promise.all([
+        apiRequest('GET', '/questions', null, true).catch(() => null),
+        apiRequest('GET', '/sections', null, true).catch(() => null),
+        apiRequest('GET', '/tests', null, true).catch(() => null),
+      ]).then(([questions, sections, tests]) => {
+        if (Array.isArray(questions)) DB.questions = questions.map(normaliseQuestion);
+        if (Array.isArray(sections)) DB.customSections = sections.filter(s => !s.is_builtin).map(s => s.name);
+        if (Array.isArray(tests)) { DB.tests = tests.map(normaliseTest); STATE.tests = DB.tests; }
+        renderTestCreator();
+      }).catch(() => renderTestCreator());
+    } else renderTestCreator();
+  }
   if (page === 'buy-credits') {
     if (USE_API && API_TOKEN) {
       apiRequest('GET', '/settings', null, true).then(s => {
@@ -3216,7 +3250,7 @@ async function renderMyAttempts(body) {
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      ${myAttempts.map(a => {
+      ${renderViewMoreList('my-attempts-list', myAttempts, a => {
         const grade = a.score>=90?'Distinction':a.score>=75?'Merit':a.score>=50?'Pass':'Fail';
         const gradeColor = a.score>=90?'var(--emerald)':a.score>=75?'var(--blue)':a.score>=50?'var(--gold-dk)':'var(--red)';
         const testTitle = a.testTitle || DB.tests.find(t=>t.id===a.testId)?.title || 'Test';
@@ -3237,7 +3271,7 @@ async function renderMyAttempts(body) {
             <span style="font-size:16px;font-weight:800;color:${gradeColor}">${a.score}%</span>
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:700;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${testTitle}</div>
+            <div style="font-size:14px;font-weight:700;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${testTitle}">${testTitle}</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
               <span class="badge badge-blue" style="font-size:10px">${typeBadge}</span>
               <span style="font-size:11px;color:var(--text3)">${mins}m ${secs}s</span>
@@ -3258,8 +3292,13 @@ async function renderMyAttempts(body) {
             </button>
           </div>
         </div>`;
-      }).join('')}
+      }, 'renderMyAttemptsView')}
     </div>`;
+}
+
+function renderMyAttemptsView() {
+  const body = document.getElementById('test-center-body');
+  if (body) renderMyAttempts(body);
 }
 
 function confirmStartTest(testId) {
@@ -5969,18 +6008,18 @@ function renderProfile() {
         <!-- Credit History -->
         <div class="card">
           <div class="card-header"><div class="card-title">💳 Credit History</div></div>
-          <div class="card-body" style="padding:0;max-height:360px;overflow-y:auto">
+          <div class="card-body" style="padding:0">
             ${(()=>{
               const allTxs = DB.creditTransactions.filter(t=>t.userId===u.id||t.user_id===u.id).slice().reverse();
               if (!allTxs.length) return '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No transactions yet.<br><span style="font-size:12px;opacity:.7">Transactions appear here after admin adds credits or you take a test.</span></div>';
-              return allTxs.map(t=>`
+              return renderViewMoreList('profile-credit-history', allTxs, t=>`
               <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
                 <div>
                   <div style="font-size:13px;font-weight:600">${t.description||'Transaction'}</div>
                   <div style="font-size:11px;color:var(--text3)">${t.date||''}${(t.paymentMode||t.payment_mode)?(' · '+(t.paymentMode||t.payment_mode)):''}</div>
                 </div>
                 <div style="font-weight:700;color:${t.amount>0?'var(--emerald)':'var(--red)'}">${t.amount>0?'+':''}${t.amount} cr</div>
-              </div>`).join('');
+              </div>`, 'renderProfile');
             })()}
           </div>
         </div>
@@ -6005,7 +6044,7 @@ function renderProfile() {
         <div class="card">
           <div class="card-header"><div class="card-title">My Test History</div></div>
           <div class="card-body" style="padding:0">
-            ${myAttempts.length ? [...myAttempts].reverse().map(a=>{
+            ${myAttempts.length ? renderViewMoreList('profile-test-history', [...myAttempts].reverse(), a=>{
               const test = DB.tests.find(t=>t.id===a.testId);
               const posM2 = test?.positiveMarks || 1;
               const negM2 = test?.negativeMarks || 0;
@@ -6033,7 +6072,7 @@ function renderProfile() {
                   </div>
                 </div>
               </div>`;
-            }).join('') : '<div style="padding:24px;text-align:center;color:var(--text3)">No tests taken yet.<br><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="navigate(\'test-center\')">Take a Test</button></div>'}
+            }, 'renderProfile') : '<div style="padding:24px;text-align:center;color:var(--text3)">No tests taken yet.<br><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="navigate(\'test-center\')">Take a Test</button></div>'}
           </div>
         </div>
 
@@ -6699,7 +6738,7 @@ function renderCredits() {
           </button>
         </div>
         <div style="padding:0">
-          ${students.sort((a,b)=>b.credits-a.credits).map(s=>`
+          ${renderViewMoreList('credits-student-balances', students.sort((a,b)=>b.credits-a.credits), s=>`
             <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;transition:background .1s" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
               <div class="avatar blue" style="width:34px;height:34px;font-size:12px;flex-shrink:0">${s.avatar}</div>
               <div style="flex:1;min-width:0">
@@ -6711,7 +6750,7 @@ function renderCredits() {
                 <div style="font-size:10px;color:var(--text3)">credits</div>
               </div>
               <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="openAddCreditsModal('${s.id}')">+</button>
-            </div>`).join('')}
+            </div>`, 'renderCredits')}
         </div>
       </div>
 
@@ -7149,12 +7188,12 @@ function renderStudentAnalysis() {
     .sort((a,b) => a.accuracy - b.accuracy);
 
   // Score trend chart bars
-  const last10 = scoreHistory.slice(-10);
+  const last10 = scoreHistory.slice(-7);
   const chartHtml = last10.map((entry, i) => {
     const h = Math.max(8, Math.round(entry.score/100*120));
     const col = entry.score>=75?'var(--emerald)':entry.score>=50?'var(--blue)':'var(--red)';
     const colLt = entry.score>=75?'var(--emerald-lt)':entry.score>=50?'var(--blue-lt)':'var(--red-lt)';
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0">
+    return `<div style="flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;max-width:80px">
       <div style="font-size:9px;font-weight:700;color:${col}">${entry.score}%</div>
       <div style="width:100%;height:120px;display:flex;align-items:flex-end">
         <div style="width:100%;height:${h}px;background:${colLt};border:1.5px solid ${col};border-radius:4px 4px 0 0;transition:height .5s"
@@ -7186,7 +7225,7 @@ function renderStudentAnalysis() {
         <div class="card mb-20">
           <div class="card-header"><div class="card-title">📈 Score Trend (Last ${last10.length} Tests)</div></div>
           <div class="card-body">
-            <div style="display:flex;align-items:flex-end;gap:4px;height:130px">${chartHtml}</div>
+            <div style="display:flex;align-items:flex-end;gap:4px;height:130px;overflow-x:auto;padding-bottom:2px">${chartHtml}</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
               <span class="chip" style="background:var(--gold-lt);color:var(--gold-dk)">🏆 Best: ${best}%</span>
               <span class="chip">⌀ Avg: ${avgScore}%</span>
@@ -7227,8 +7266,8 @@ function renderStudentAnalysis() {
               <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
                 <div style="width:28px;height:28px;border-radius:50%;background:var(--red-lt);color:var(--red);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">${i+1}</div>
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.topic}</div>
-                  <div style="font-size:10px;color:var(--text3)">${t.section} • ${t.correct}/${t.total} correct</div>
+                  <div style="font-size:13px;font-weight:600;white-space:normal;overflow-wrap:break-word;line-height:1.3" title="${t.topic}">${t.topic}</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px">${t.section} • ${t.correct}/${t.total} correct</div>
                   <div style="height:4px;background:var(--bg);border-radius:2px;overflow:hidden;margin-top:5px">
                     <div style="height:100%;width:${t.accuracy}%;background:var(--red);border-radius:2px"></div>
                   </div>
@@ -7250,8 +7289,8 @@ function renderStudentAnalysis() {
               <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
                 <div style="width:28px;height:28px;border-radius:50%;background:var(--emerald-lt);color:var(--emerald-dk);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">${i+1}</div>
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.topic}</div>
-                  <div style="font-size:10px;color:var(--text3)">${t.section} • ${t.correct}/${t.total} correct</div>
+                  <div style="font-size:13px;font-weight:600;white-space:normal;overflow-wrap:break-word;line-height:1.3" title="${t.topic}">${t.topic}</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px">${t.section} • ${t.correct}/${t.total} correct</div>
                   <div style="height:4px;background:var(--bg);border-radius:2px;overflow:hidden;margin-top:5px">
                     <div style="height:100%;width:${t.accuracy}%;background:var(--emerald);border-radius:2px"></div>
                   </div>
