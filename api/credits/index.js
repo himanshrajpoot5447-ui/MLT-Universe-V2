@@ -41,7 +41,7 @@ export default handler(async (req, res) => {
     try {
       await supaRest('POST', 'credit_transactions', {
         user_id: userId, amount: parseInt(amount),
-        type: amount > 0 ? 'manual' : 'deduction',
+        type: amount > 0 ? 'credit' : 'debit',
         description: description || (amount > 0 ? 'Credits added' : 'Credits deducted'),
         note, payment_mode: paymentMode,
         paid_amount: parseFloat(paidAmount) || 0,
