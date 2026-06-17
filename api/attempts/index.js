@@ -104,7 +104,7 @@ export default handler(async (req, res) => {
       await supaRest('PATCH', `users?id=eq.${user.id}`, { credits: newCredits });
       try {
         await supaRest('POST', 'credit_transactions', {
-          user_id: user.id, amount: -test.credits, type: 'deduction',
+          user_id: user.id, amount: -test.credits, type: 'debit',
           description: `Test Started: ${test.title}`, date: today,
         });
       } catch (e) {
@@ -188,7 +188,7 @@ export default handler(async (req, res) => {
       await supaRest('PATCH', `users?id=eq.${user.id}`, { credits: newCr });
       try {
         await supaRest('POST', 'credit_transactions', {
-          user_id: user.id, amount: -test.credits, type: 'deduction',
+          user_id: user.id, amount: -test.credits, type: 'debit',
           description: `Test: ${test.title}`, date: today,
         });
       } catch (e) {
@@ -198,7 +198,7 @@ export default handler(async (req, res) => {
       // Free test — still record a zero-amount entry so activity shows up in credit history
       try {
         await supaRest('POST', 'credit_transactions', {
-          user_id: user.id, amount: 0, type: 'manual',
+          user_id: user.id, amount: 0, type: 'credit',
           description: `Test Completed: ${test.title} (+${xp} XP)`, date: today,
         });
       } catch (e) {
