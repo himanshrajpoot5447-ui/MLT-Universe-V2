@@ -1740,6 +1740,55 @@ function renderViewMoreList(listKey, items, renderItem, rerenderFn, pageSize = V
   return itemsHtml + btnHtml;
 }
 
+// Tracks current page number for each true-pagination list, keyed by list id
+const PAGINATION = {};
+const PAGE_SIZE = 10;
+
+// Renders one page (default 10 items) of `items` plus Prev/Next + page-number controls.
+// `listKey` must be unique per list on the page. `renderItem` returns the HTML for one item
+// (e.g. one <tr>...</tr> or one card). `rerenderFn` is the function name (string) to call
+// after changing page. Returns { itemsHtml, paginationHtml } so callers can place the
+// pagination bar wherever it belongs (e.g. outside a <table>).
+function paginate(listKey, items, renderItem, rerenderFn, pageSize = PAGE_SIZE) {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  let page = PAGINATION[listKey] || 1;
+  if (page > totalPages) page = totalPages;
+  if (page < 1) page = 1;
+  PAGINATION[listKey] = page;
+
+  const start = (page - 1) * pageSize;
+  const visible = items.slice(start, start + pageSize);
+  const itemsHtml = visible.map(renderItem).join('');
+
+  if (items.length <= pageSize) {
+    return { itemsHtml, paginationHtml: '' };
+  }
+
+  // Build a compact page-number list: first, last, current ±1, with ellipses
+  const pageNums = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || Math.abs(p - page) <= 1) pageNums.push(p);
+    else if (pageNums[pageNums.length - 1] !== '…') pageNums.push('…');
+  }
+
+  const setPage = p => `PAGINATION['${listKey}']=${p};${rerenderFn}()`;
+  const pageBtns = pageNums.map(p => p === '…'
+    ? `<span style="padding:0 6px;color:var(--text3);font-size:12px">…</span>`
+    : `<button class="btn btn-sm ${p===page?'btn-primary':'btn-secondary'}" style="min-width:30px;padding:4px 0;font-size:12px" onclick="${setPage(p)}">${p}</button>`
+  ).join('');
+
+  const paginationHtml = `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap">
+    <div style="font-size:12px;color:var(--text3)">Showing ${start+1}-${Math.min(start+pageSize, items.length)} of ${items.length}</div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="btn btn-sm btn-secondary" style="padding:4px 10px;font-size:12px" ${page<=1?'disabled':''} onclick="${setPage(page-1)}">‹ Prev</button>
+      ${pageBtns}
+      <button class="btn btn-sm btn-secondary" style="padding:4px 10px;font-size:12px" ${page>=totalPages?'disabled':''} onclick="${setPage(page+1)}">Next ›</button>
+    </div>
+  </div>`;
+
+  return { itemsHtml, paginationHtml };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // IN-MEMORY DATABASE (Full Backend Simulation)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2766,7 +2815,7 @@ function renderDashboard() {
       <div class="card-header">
         <div class="card-title">Student Performance (Test Attempts)</div>
         <div style="display:flex;gap:6px">
-          ${['day','week','month','year'].map(p=>`<button onclick="renderDashboardChart('${p}')" id="chart-period-${p}" class="btn btn-sm" style="padding:4px 10px;font-size:11px">${p.charAt(0).toUpperCase()+p.slice(1)}</button>`).join('')}
+          ${['week','month','year'].map(p=>`<button onclick="renderDashboardChart('${p}')" id="chart-period-${p}" class="btn btn-sm" style="padding:4px 10px;font-size:11px">${p.charAt(0).toUpperCase()+p.slice(1)}</button>`).join('')}
         </div>
       </div>
       <div class="card-body">
@@ -2848,7 +2897,7 @@ function renderDashboardChart(period) {
   if (!chartEl) return;
 
   // Highlight active period button
-  ['day','week','month','year'].forEach(p => {
+  ['week','month','year'].forEach(p => {
     const btn = document.getElementById(`chart-period-${p}`);
     if (btn) {
       btn.className = `btn btn-sm${p===period?' btn-primary':'  btn-secondary'}`;
@@ -2859,12 +2908,7 @@ function renderDashboardChart(period) {
   const now = new Date();
   let buckets = [], labelFn, filterFn;
 
-  if (period === 'day') {
-    // Last 24 hours by hour
-    buckets = Array.from({length:24},(_,i)=>{ const d=new Date(now); d.setHours(d.getHours()-23+i); return { key: d.getHours(), label: d.getHours()+'h', count:0 }; });
-    filterFn = a => { const d=new Date(a.completedAt); return (now-d)<86400000; };
-    labelFn = a => new Date(a.completedAt).getHours();
-  } else if (period === 'week') {
+  if (period === 'week') {
     const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     buckets = Array.from({length:7},(_,i)=>{ const d=new Date(now); d.setDate(d.getDate()-6+i); return { key:d.toISOString().split('T')[0], label:days[d.getDay()], count:0 }; });
     filterFn = a => { const d=new Date(a.completedAt); return (now-d)<7*86400000; };
@@ -5720,6 +5764,7 @@ async function renderLeaderboard() {
 }
 
 function buildLeaderboardHTML(ranked) {
+  _lastRanked = ranked; // cache so page-change clicks can rerender without recomputing rankings
   const avatarColors = ['gold', 'blue', 'green'];
   const medals = ['🥇', '🥈', '🥉'];
   const myRank = ranked.find(s => s.id === STATE.user?.id);
@@ -5734,6 +5779,27 @@ function buildLeaderboardHTML(ranked) {
         <div style="font-size:13px">Complete tests to appear on the ${LB_FILTER} leaderboard.</div>
       </div>`;
   }
+
+  const { itemsHtml, paginationHtml } = paginate('leaderboard-table', ranked, s => {
+    const i = s.rank - 1; // 0-based index of this student's TRUE rank, not the page-local loop index
+    return `
+    <tr style="${s.id === STATE.user?.id ? 'background:var(--blue-lt);font-weight:600' : ''}">
+      <td><span class="lb-rank ${i < 3 ? 'top3' : ''}">${medals[i] || '#' + (i + 1)}</span></td>
+      <td>
+        <div class="flex flex-center gap-8">
+          <div class="avatar ${avatarColors[Math.min(i,2)] || 'blue'}" style="width:28px;height:28px;font-size:11px">${s.avatar}</div>
+          <div>
+            <div style="font-weight:600;font-size:13px">${s.name}${s.id === STATE.user?.id ? ' (You)' : ''}</div>
+            <div style="font-size:11px;color:var(--text3)">${s.email || ''}</div>
+          </div>
+        </div>
+      </td>
+      <td><strong>${s.periodXP}</strong></td>
+      <td>${s.testsCompleted}</td>
+      <td><span class="badge ${s.avgScore >= 75 ? 'badge-green' : s.avgScore >= 50 ? 'badge-gold' : 'badge-gray'}">${s.avgScore}%</span></td>
+      <td><span class="badge ${i === 0 ? 'badge-gold' : i === 1 ? 'badge-blue' : i === 2 ? 'badge-green' : 'badge-gray'}">${i === 0 ? 'Gold' : i === 1 ? 'Silver' : i === 2 ? 'Bronze' : 'Active'}</span></td>
+    </tr>`;
+  }, 'renderLeaderboardPage');
 
   return `
     <div style="margin-bottom:16px;font-size:12px;color:var(--text3);font-weight:500;text-align:right">Showing XP earned in the ${periodLabel}</div>
@@ -5765,27 +5831,17 @@ function buildLeaderboardHTML(ranked) {
       <table>
         <thead><tr><th>Rank</th><th>Student</th><th>XP (Period)</th><th>Tests</th><th>Avg Score</th><th>Status</th></tr></thead>
         <tbody>
-          ${ranked.map((s, i) => `
-            <tr style="${s.id === STATE.user?.id ? 'background:var(--blue-lt);font-weight:600' : ''}">
-              <td><span class="lb-rank ${i < 3 ? 'top3' : ''}">${medals[i] || '#' + (i + 1)}</span></td>
-              <td>
-                <div class="flex flex-center gap-8">
-                  <div class="avatar ${avatarColors[Math.min(i,2)] || 'blue'}" style="width:28px;height:28px;font-size:11px">${s.avatar}</div>
-                  <div>
-                    <div style="font-weight:600;font-size:13px">${s.name}${s.id === STATE.user?.id ? ' (You)' : ''}</div>
-                    <div style="font-size:11px;color:var(--text3)">${s.email || ''}</div>
-                  </div>
-                </div>
-              </td>
-              <td><strong>${s.periodXP}</strong></td>
-              <td>${s.testsCompleted}</td>
-              <td><span class="badge ${s.avgScore >= 75 ? 'badge-green' : s.avgScore >= 50 ? 'badge-gold' : 'badge-gray'}">${s.avgScore}%</span></td>
-              <td><span class="badge ${i === 0 ? 'badge-gold' : i === 1 ? 'badge-blue' : i === 2 ? 'badge-green' : 'badge-gray'}">${i === 0 ? 'Gold' : i === 1 ? 'Silver' : i === 2 ? 'Bronze' : 'Active'}</span></td>
-            </tr>`).join('')}
+          ${itemsHtml}
         </tbody>
       </table>
+      ${paginationHtml}
     </div>
   `;
+}
+
+let _lastRanked = [];
+function renderLeaderboardPage() {
+  document.getElementById('lb-body').innerHTML = buildLeaderboardHTML(_lastRanked);
 }
 
 async function viewAttempt(attemptId) {
@@ -6421,25 +6477,8 @@ function renderUsers() {
   const canCreate = STATE.user?.role==='master';
   let users = DB.users.filter(u=>u.id!==STATE.user?.id);
   if (userSearch) users = users.filter(u=>u.name.toLowerCase().includes(userSearch)||u.email.toLowerCase().includes(userSearch)||u.phone?.includes(userSearch)||u.role.includes(userSearch));
-  
-  document.getElementById('users-body').innerHTML = `
-    <div class="card">
-      <div class="card-header" style="gap:12px;flex-wrap:wrap">
-        <div style="position:relative;flex:1;min-width:200px">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input class="form-input" style="padding-left:36px" placeholder="Search by name, User ID, phone…" oninput="userSearch=this.value.toLowerCase();renderUsers()">
-        </div>
-        <div class="flex gap-8">
-          <button class="btn btn-secondary btn-sm" onclick="renderUsers()">All</button>
-          <button class="btn btn-secondary btn-sm" onclick="userSearch='student';renderUsers()">Students Only</button>
-          <button class="btn btn-secondary btn-sm" onclick="userSearch='admin';renderUsers()">Admins Only</button>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <table>
-          <thead><tr><th>User</th><th>Role</th><th>Credits</th><th>XP</th><th>Status</th><th>Joined</th><th style="text-align:right">Actions</th></tr></thead>
-          <tbody>
-            ${users.map(u=>`
+
+  const { itemsHtml, paginationHtml } = paginate('user-management', users, u=>`
               <tr>
                 <td>
                   <div class="flex flex-center gap-10">
@@ -6465,11 +6504,30 @@ function renderUsers() {
                     <button class="btn btn-secondary btn-sm" onclick="openEditUserModal('${u.id}')">Edit</button>
                   </div>
                 </td>
-              </tr>`).join('')}
+              </tr>`, 'renderUsers');
+
+  document.getElementById('users-body').innerHTML = `
+    <div class="card">
+      <div class="card-header" style="gap:12px;flex-wrap:wrap">
+        <div style="position:relative;flex:1;min-width:200px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="form-input" style="padding-left:36px" placeholder="Search by name, User ID, phone…" oninput="userSearch=this.value.toLowerCase();PAGINATION['user-management']=1;renderUsers()">
+        </div>
+        <div class="flex gap-8">
+          <button class="btn btn-secondary btn-sm" onclick="userSearch='';PAGINATION['user-management']=1;renderUsers()">All</button>
+          <button class="btn btn-secondary btn-sm" onclick="userSearch='student';PAGINATION['user-management']=1;renderUsers()">Students Only</button>
+          <button class="btn btn-secondary btn-sm" onclick="userSearch='admin';PAGINATION['user-management']=1;renderUsers()">Admins Only</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>User</th><th>Role</th><th>Credits</th><th>XP</th><th>Status</th><th>Joined</th><th style="text-align:right">Actions</th></tr></thead>
+          <tbody>
+            ${itemsHtml}
           </tbody>
         </table>
       </div>
-      <div style="padding:12px 16px;background:var(--surface);border-top:1px solid var(--border);font-size:12px;color:var(--text3)">Showing ${users.length} of ${DB.users.length-1} users</div>
+      ${paginationHtml || `<div style="padding:12px 16px;background:var(--surface);border-top:1px solid var(--border);font-size:12px;color:var(--text3)">Showing ${users.length} of ${DB.users.length-1} users</div>`}
     </div>
   `;
 }
@@ -6790,7 +6848,7 @@ function renderCredits() {
         <div class="card-title">Transaction Ledger</div>
         <div style="display:flex;gap:6px">
           ${['all','credit','debit'].map(f=>`
-            <button onclick="window._txFilter='${f}';renderCredits()" style="padding:4px 10px;border-radius:20px;border:1px solid ${txTypeFilter===f?'var(--blue)':'var(--border)'};background:${txTypeFilter===f?'var(--blue-lt)':'var(--card)'};font-size:11px;font-weight:600;cursor:pointer;color:${txTypeFilter===f?'var(--blue)':'var(--text3)'}">
+            <button onclick="window._txFilter='${f}';PAGINATION['transaction-ledger']=1;renderCredits()" style="padding:4px 10px;border-radius:20px;border:1px solid ${txTypeFilter===f?'var(--blue)':'var(--border)'};background:${txTypeFilter===f?'var(--blue-lt)':'var(--card)'};font-size:11px;font-weight:600;cursor:pointer;color:${txTypeFilter===f?'var(--blue)':'var(--text3)'}">
               ${f==='all'?'All':f==='credit'?'Credits In':'Debits Out'}
             </button>`).join('')}
         </div>
@@ -6809,7 +6867,7 @@ function renderCredits() {
             </tr>
           </thead>
           <tbody>
-            ${filteredTxs.map(t=>{
+            ${paginate('transaction-ledger', filteredTxs, t=>{
               const user = DB.users.find(u=>u.id===t.userId);
               const byUser = DB.users.find(u=>u.id===t.by);
               const isCredit = t.amount > 0;
@@ -6842,10 +6900,11 @@ function renderCredits() {
                 </td>
                 <td style="padding:11px 14px;font-size:11px;color:var(--text3)">${byUser?.name?.split(' ')[0]||t.by}</td>
               </tr>`;
-            }).join('')}
+            }, 'renderCredits').itemsHtml}
           </tbody>
         </table>
         ${filteredTxs.length===0?'<div class="empty-state" style="padding:32px">No transactions found.</div>':''}
+        ${paginate('transaction-ledger', filteredTxs, ()=>'', 'renderCredits').paginationHtml}
       </div>
     </div>
   </div>
@@ -7021,7 +7080,7 @@ function renderAnalytics() {
       <div class="card">
         <div class="card-header"><div class="card-title">Test Performance</div></div>
         <div class="card-body" style="padding:0">
-          ${testPerf.map(t=>`
+          ${(()=>{ const {itemsHtml,paginationHtml} = paginate('analytics-test-perf', testPerf, t=>`
             <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                 <div style="font-size:13px;font-weight:600;flex:1;margin-right:12px">${t.title}</div>
@@ -7033,13 +7092,15 @@ function renderAnalytics() {
                 </div>
                 <span style="font-size:11px;color:var(--text3)">${t.attemptCount} attempts</span>
               </div>
-            </div>`).join('')}
+            </div>`, 'renderAnalytics'); return itemsHtml + paginationHtml; })()}
         </div>
       </div>
       <div class="card">
         <div class="card-header"><div class="card-title">Student Performance</div></div>
         <div class="card-body" style="padding:0">
-          ${studentPerf.map((s,i)=>`
+          ${(()=>{ const {itemsHtml,paginationHtml} = paginate('analytics-student-perf', studentPerf, (s,idx)=>{
+            const i = studentPerf.indexOf(s); // true overall rank, not page-local index
+            return `
             <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
               <div style="font-weight:700;color:var(--text3);font-size:14px;width:20px">${i+1}</div>
               <div class="avatar blue" style="width:30px;height:30px;font-size:11px">${s.avatar}</div>
@@ -7048,7 +7109,7 @@ function renderAnalytics() {
                 <div style="font-size:11px;color:var(--text3)">${s.testsCompleted} tests • ${s.totalXP} XP</div>
               </div>
               <span class="badge ${s.avgScore>=75?'badge-green':s.avgScore>=50?'badge-gold':'badge-gray'}">${s.avgScore}%</span>
-            </div>`).join('')}
+            </div>`; }, 'renderAnalytics'); return itemsHtml + paginationHtml; })()}
         </div>
       </div>
     </div>
