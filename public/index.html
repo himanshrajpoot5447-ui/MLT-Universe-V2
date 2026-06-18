@@ -2694,7 +2694,9 @@ function renderDashboard() {
   const avgScore = totalAttempts ? Math.round(DB.attempts.reduce((s,a)=>s+a.score,0)/totalAttempts) : 0;
   const totalAdmins = DB.users.filter(x=>x.role==='admin').length;
 
-  const recentAttempts = [...DB.attempts].reverse().slice(0,6).map(a=>{
+  // DB.attempts arrives from the API already sorted newest-first (completed_at.desc);
+  // do NOT reverse it here, or the dashboard shows the oldest attempts instead of the most recent.
+  const recentAttempts = [...DB.attempts].slice(0,6).map(a=>{
     const usr = DB.users.find(x=>x.id===a.userId);
     const tst = DB.tests.find(t=>t.id===a.testId);
     return {...a,userName:usr?.name,testTitle:tst?.title};
@@ -5955,7 +5957,6 @@ function renderProfile() {
     : totalSeconds >= 60
       ? Math.floor(totalSeconds/60) + 'm'
       : totalSeconds > 0 ? totalSeconds + 's' : '0m';
-  const myTxs = DB.creditTransactions.filter(t=>t.userId===u.id).slice(-5).reverse();
   // Use server-stored rank from STATE.user first, fall back to local leaderboard sort
   const leaderboard = DB.users.filter(x=>x.role==='student').sort((a,b)=>b.totalXP-a.totalXP);
   const myRankIdx = leaderboard.findIndex(s=>s.id===u.id);
@@ -6010,7 +6011,8 @@ function renderProfile() {
           <div class="card-header"><div class="card-title">💳 Credit History</div></div>
           <div class="card-body" style="padding:0">
             ${(()=>{
-              const allTxs = DB.creditTransactions.filter(t=>t.userId===u.id||t.user_id===u.id).slice().reverse();
+              // DB.creditTransactions already arrives newest-first from the API (created_at.desc) — don't reverse it
+              const allTxs = DB.creditTransactions.filter(t=>t.userId===u.id||t.user_id===u.id);
               if (!allTxs.length) return '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No transactions yet.<br><span style="font-size:12px;opacity:.7">Transactions appear here after admin adds credits or you take a test.</span></div>';
               return renderViewMoreList('profile-credit-history', allTxs, t=>`
               <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
@@ -6044,7 +6046,7 @@ function renderProfile() {
         <div class="card">
           <div class="card-header"><div class="card-title">My Test History</div></div>
           <div class="card-body" style="padding:0">
-            ${myAttempts.length ? renderViewMoreList('profile-test-history', [...myAttempts].reverse(), a=>{
+            ${myAttempts.length ? renderViewMoreList('profile-test-history', myAttempts, a=>{
               const test = DB.tests.find(t=>t.id===a.testId);
               const posM2 = test?.positiveMarks || 1;
               const negM2 = test?.negativeMarks || 0;
@@ -6482,7 +6484,7 @@ function viewUserAttempts(userId) {
     </div>
     <div class="modal-body" style="padding:0;max-height:65vh;overflow-y:auto">
       ${!attempts.length ? '<div style="padding:24px;text-align:center;color:var(--text3)">No attempts yet.</div>' :
-        attempts.slice().reverse().map(a => {
+        attempts.map(a => {
           const test = DB.tests.find(t => t.id === a.testId);
           return `<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
             <div style="flex:1">
@@ -6502,7 +6504,8 @@ function viewUserAttempts(userId) {
 
 function viewUserCredits(userId) {
   const u = DB.users.find(x => x.id === userId);
-  const txs = DB.creditTransactions.filter(t => t.userId === userId).slice().reverse();
+  // DB.creditTransactions already arrives newest-first from the API (created_at.desc)
+  const txs = DB.creditTransactions.filter(t => t.userId === userId);
   openModal(`
     <div class="modal-header">
       <div class="modal-title">Credit History — ${u?.name || 'User'} (Balance: ${u?.credits || 0} cr)</div>
@@ -6698,7 +6701,8 @@ const PAYMENT_MODES = ['Cash','UPI','Bank Transfer','Cheque','Other'];
 
 function renderCredits() {
   const students = DB.users.filter(u=>u.role==='student');
-  const allTxs = [...DB.creditTransactions].reverse();
+  // DB.creditTransactions already arrives newest-first from the API (created_at.desc) — don't reverse it
+  const allTxs = [...DB.creditTransactions];
   const creditTxs = allTxs.filter(t=>t.amount>0);
   const totalCreditedThisMonth = creditTxs.filter(t=>t.date&&t.date.startsWith(new Date().toISOString().slice(0,7))).reduce((s,t)=>s+t.amount,0);
   const totalRevenue = creditTxs.reduce((s,t)=>s+(t.paidAmount||0),0);
