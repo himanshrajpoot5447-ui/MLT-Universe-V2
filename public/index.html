@@ -4568,7 +4568,10 @@ let QE = { open: false };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-// Questions that have been used in ANY topic test
+// Questions that have been used in ANY topic test.
+// NOTE: as of the fix allowing the question bank to be freely shared across test types,
+// this set is no longer used to exclude questions from Section Tests or Complete Mocks —
+// kept here in case a future requirement needs it again.
 function getUsedInTopicIds() {
   return new Set(DB.questions.filter(q=>q.usedInTopicTest).map(q=>q.id));
 }
@@ -4601,18 +4604,22 @@ function getUsedInSectionIds(section, excludeTestId) {
 }
 
 // Get available questions for section test
-// Excludes: questions used in topic tests + questions already assigned to other section tests of same section
+// Excludes ONLY: questions already assigned to other published section tests of the same topic.
+// Questions used in a Topic Test are intentionally NOT excluded here — the question bank is
+// shared, and a question appearing in a standalone Topic Test should still be eligible to be
+// pulled into a Section Test built from that same topic.
 function getAvailableForSection(section, excludeTestId) {
-  const usedInTopic = getUsedInTopicIds();
   const usedInSection = getUsedInSectionIds(section, excludeTestId);
-  return DB.questions.filter(q=>q.section===section && !usedInTopic.has(q.id) && !usedInSection.has(q.id));
+  return DB.questions.filter(q=>q.section===section && !usedInSection.has(q.id));
 }
 
-// Get available questions for complete mock (exclude those used in other mocks, and used in topic tests)
+// Get available questions for complete mock.
+// Excludes ONLY: questions already assigned to another published Complete Mock.
+// Questions used in a Topic Test (or a Section Test) are intentionally NOT excluded — the
+// question bank is shared across all test types.
 function getAvailableForMock(section, excludeTestId) {
   const usedInMock = getUsedInMockIds(excludeTestId);
-  const usedInTopic = getUsedInTopicIds();
-  return DB.questions.filter(q=>q.section===section && !usedInMock.has(q.id) && !usedInTopic.has(q.id));
+  return DB.questions.filter(q=>q.section===section && !usedInMock.has(q.id));
 }
 
 // ── renderTestCreator ─────────────────────────────────────────────────────────
@@ -4784,7 +4791,7 @@ function renderTestCreator() {
           <div class="form-group" style="margin-bottom:0">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <label class="form-label" style="margin:0">Topics & Weightage</label>
-              <span style="font-size:11px;color:var(--text3)">Questions excluded if used in a topic test</span>
+              <span style="font-size:11px;color:var(--text3)">Shared question bank — excludes only questions already used in another published Section Test of this topic</span>
             </div>
             <!-- Existing topics as quick-add chips -->
             ${(()=>{
@@ -4808,7 +4815,7 @@ function renderTestCreator() {
                 <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface);border:1.5px solid var(--blue);border-radius:var(--radius)">
                   <div style="flex:1">
                     <div style="font-size:13px;font-weight:700">${t}</div>
-                    <div style="font-size:10px;color:var(--text3);margin-top:2px">${avail} available questions (excl. those used in topic tests)</div>
+                    <div style="font-size:10px;color:var(--text3);margin-top:2px">${avail} available questions</div>
                   </div>
                   <input type="number" min="1" max="${avail||99}" value="${TC.topicDistribution[t]||5}"
                     oninput="TC.topicDistribution['${t}']=Math.min(parseInt(this.value)||1,${avail||99});document.getElementById('sec-topic-total').textContent=Object.values(TC.topicDistribution).reduce((a,b)=>a+b,0)"
@@ -5421,9 +5428,8 @@ async function publishTest() {
   if (TC.type==='complete') {
     totalQs = Object.values(TC.sectionDistribution).reduce((a,b)=>a+b,0)||0;
     const usedInMock = getUsedInMockIds(TC.editingId);
-    const usedInTopic = getUsedInTopicIds();
     Object.entries(TC.sectionDistribution).forEach(([sec,count])=>{
-      const pool = shuffle(DB.questions.filter(q=>q.section===sec&&!usedInMock.has(q.id)&&!usedInTopic.has(q.id)));
+      const pool = shuffle(DB.questions.filter(q=>q.section===sec&&!usedInMock.has(q.id)));
       assignedQuestionIds.push(...pool.slice(0,count).map(q=>q.id));
     });
   } else if (TC.type==='section') {
@@ -5684,15 +5690,14 @@ function getQuestionsForTest(test) {
       return shuffle(DB.questions.filter(q=>test.assignedQuestionIds.includes(q.id))).slice(0,test.totalQuestions);
     }
     // Fallback: pick dynamically (for legacy tests without assignedQuestionIds)
-    const usedInTopic = getUsedInTopicIds();
     const dist = test.topicDistribution||{};
     let pool = [];
     (test.topics||[]).forEach(topic=>{
       const count = dist[topic]||5;
-      const tPool = shuffle(DB.questions.filter(q=>q.section===test.section&&q.topic===topic&&!usedInTopic.has(q.id)));
+      const tPool = shuffle(DB.questions.filter(q=>q.section===test.section&&q.topic===topic));
       pool.push(...tPool.slice(0,count));
     });
-    if (pool.length===0) pool = shuffle(DB.questions.filter(q=>q.section===test.section&&!usedInTopic.has(q.id)));
+    if (pool.length===0) pool = shuffle(DB.questions.filter(q=>q.section===test.section));
     return shuffle(pool).slice(0,test.totalQuestions);
   }
   // complete
