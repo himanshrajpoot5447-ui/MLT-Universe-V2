@@ -2252,7 +2252,8 @@ function normaliseTest(t) {
     positiveMarks:  t.positive_marks  ?? t.positiveMarks  ?? 1,
     negativeMarks:  t.negative_marks  ?? t.negativeMarks  ?? 0,
     section: t.section || '', topic: t.topic || '',
-    topics: t.topics || [], topicDistribution: t.topic_distribution || t.topicDistribution || {},
+    topics: typeof t.topics === 'string' ? JSON.parse(t.topics) : (t.topics || []),
+    topicDistribution: t.topic_distribution || t.topicDistribution || {},
     sections: t.sections || [], sectionDistribution: t.section_distribution || t.sectionDistribution || {},
     questionIds:         t.question_ids          || t.questionIds          || [],
     assignedQuestionIds: t.assigned_question_ids || t.assignedQuestionIds  || [],
@@ -4581,11 +4582,21 @@ function getUsedInMockIds(excludeTestId) {
   return used;
 }
 
-// Questions already assigned to OTHER published section tests of the same section
+// Questions already assigned to OTHER published section tests that include the SAME topic.
+// (Scoped by topic, not just by parent section — a section can contain several independent
+// topics, each with its own section test; locking by section alone would make every topic's
+// questions disappear the moment ANY other topic in that section gets a published test.)
 function getUsedInSectionIds(section, excludeTestId) {
   const used = new Set();
   DB.tests.filter(t=>t.type==='section' && t.status==='published' && t.section===section && t.id!==excludeTestId)
-    .forEach(t=>{ (t.assignedQuestionIds||[]).forEach(id=>used.add(id)); });
+    .forEach(t=>{
+      const testTopics = new Set(t.topics || (t.topic ? [t.topic] : []));
+      (t.assignedQuestionIds||[]).forEach(id=>{
+        const q = DB.questions.find(qq=>qq.id===id);
+        // Only exclude this question if its own topic is one of the topics this OTHER test actually used
+        if (q && testTopics.has(q.topic)) used.add(id);
+      });
+    });
   return used;
 }
 
